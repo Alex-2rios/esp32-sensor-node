@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" width="860" height="470" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="860" height="470" fill="#ffffff"/>
+  <text x="28" y="38" font-size="19" font-weight="600" fill="#111827">esp32-sensor-node — wiring</text>
+  <text x="28" y="58" font-size="12" fill="#6b7280">ESP32 DevKit v1, DHT22 and an LDR divider. Everything runs off the board 3V3 rail.</text>
+
+  <rect x="300" y="96" width="200" height="320" rx="10" fill="#1f2937" stroke="#111827"/>
+  <text x="400" y="126" font-size="14" font-weight="600" text-anchor="middle" fill="#f9fafb">ESP32 DevKit v1</text>
+  <rect x="330" y="140" width="140" height="30" rx="4" fill="#374151"/>
+  <text x="400" y="160" font-size="11" text-anchor="middle" fill="#d1d5db">USB / 5V in</text>
+
+  <text x="312" y="206" font-size="12" fill="#93c5fd">3V3</text>
+  <text x="312" y="246" font-size="12" fill="#93c5fd">GPIO4</text>
+  <text x="312" y="286" font-size="12" fill="#93c5fd">GPIO34</text>
+  <text x="312" y="326" font-size="12" fill="#93c5fd">GPIO2</text>
+  <text x="312" y="366" font-size="12" fill="#93c5fd">GND</text>
+
+  <circle cx="300" cy="202" r="4" fill="#f59e0b"/>
+  <circle cx="300" cy="242" r="4" fill="#f59e0b"/>
+  <circle cx="300" cy="282" r="4" fill="#f59e0b"/>
+  <circle cx="300" cy="322" r="4" fill="#f59e0b"/>
+  <circle cx="300" cy="362" r="4" fill="#f59e0b"/>
+
+  <rect x="70" y="176" width="150" height="92" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="145" y="202" font-size="13" font-weight="600" text-anchor="middle" fill="#1e3a8a">DHT22</text>
+  <text x="145" y="222" font-size="11" text-anchor="middle" fill="#1d4ed8">1 VCC  2 DATA</text>
+  <text x="145" y="238" font-size="11" text-anchor="middle" fill="#1d4ed8">3 NC   4 GND</text>
+  <text x="145" y="258" font-size="10" text-anchor="middle" fill="#3b82f6">10k pull-up VCC to DATA</text>
+
+  <rect x="70" y="300" width="150" height="92" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="145" y="326" font-size="13" font-weight="600" text-anchor="middle" fill="#14532d">LDR divider</text>
+  <text x="145" y="346" font-size="11" text-anchor="middle" fill="#15803d">3V3 - LDR - node</text>
+  <text x="145" y="362" font-size="11" text-anchor="middle" fill="#15803d">node - 10k - GND</text>
+  <text x="145" y="382" font-size="10" text-anchor="middle" fill="#22c55e">node goes to GPIO34</text>
+
+  <rect x="580" y="290" width="150" height="70" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="655" y="316" font-size="13" font-weight="600" text-anchor="middle" fill="#7f1d1d">status LED</text>
+  <text x="655" y="336" font-size="11" text-anchor="middle" fill="#b91c1c">onboard on GPIO2</text>
+  <text x="655" y="352" font-size="10" text-anchor="middle" fill="#ef4444">blinks while joining wifi</text>
+
+  <path d="M220 200 L300 202" stroke="#dc2626" stroke-width="2" fill="none"/>
+  <path d="M220 222 L262 222 L262 242 L300 242" stroke="#2563eb" stroke-width="2" fill="none"/>
+  <path d="M220 250 L246 250 L246 362 L300 362" stroke="#334155" stroke-width="2" fill="none"/>
+  <path d="M220 330 L272 330 L272 282 L300 282" stroke="#16a34a" stroke-width="2" fill="none"/>
+  <path d="M500 322 L580 322" stroke="#dc2626" stroke-width="2" fill="none"/>
+
+  <rect x="560" y="96" width="272" height="160" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="578" y="122" font-size="12" font-weight="600" fill="#334155">notes</text>
+  <text x="578" y="146" font-size="11" fill="#475569">GPIO34 is input only and sits on ADC1.</text>
+  <text x="578" y="164" font-size="11" fill="#475569">ADC2 pins stop working once wifi is on,</text>
+  <text x="578" y="182" font-size="11" fill="#475569">so the LDR has to be on an ADC1 pin.</text>
+  <text x="578" y="206" font-size="11" fill="#475569">DHT22 needs 2 s between reads. Polling</text>
+  <text x="578" y="224" font-size="11" fill="#475569">faster returns NaN, not fresher data.</text>
+  <text x="578" y="248" font-size="11" fill="#475569">GPIO2 also drives boot mode, keep it clear.</text>
+</svg>

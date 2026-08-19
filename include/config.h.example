@@ -1,0 +1,13 @@
+#pragma once
+
+#define WIFI_SSID       "your-network"
+#define WIFI_PASSWORD   "your-password"
+
+#define DEVICE_NAME     "sensor-node"
+
+#define PIN_DHT         4
+#define PIN_LDR         34
+#define PIN_LED         2
+
+#define SAMPLE_INTERVAL_MS  5000
+#define HISTORY_SIZE        120

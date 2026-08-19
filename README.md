@@ -1,5 +1,7 @@
 # ESP32 sensor node
 
+[![ci](https://github.com/Alex-2rios/esp32-sensor-node/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex-2rios/esp32-sensor-node/actions/workflows/ci.yml)
+
 An ESP32 reading temperature, humidity and light, serving its own dashboard over WiFi. No cloud,
 no broker, no app. You point a browser at the board and it answers.
 
@@ -59,6 +61,17 @@ pio device monitor
 Forgetting the second one is the classic mistake. The board comes up fine, the API answers, and
 `/` returns a 500 telling you the filesystem is empty. `include/config.h` is gitignored, so the
 credentials never end up in the repo.
+
+The build is checked in CI on every push, along with cppcheck static analysis. Current footprint
+on an ESP32 DevKit v1:
+
+```
+RAM:   [=         ]  14.7% (used 48284 bytes from 327680 bytes)
+Flash: [======    ]  65.0% (used 851629 bytes from 1310720 bytes)
+```
+
+Two thirds of the flash is the WiFi stack and the web server, not my code. Worth knowing before
+planning OTA updates, which need room for two copies of the firmware at once.
 
 Wiring, pin map and the parts list are in [docs/wiring.md](docs/wiring.md).
 

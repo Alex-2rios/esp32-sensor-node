@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sensor node</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: system-ui, -apple-system, sans-serif;
+         background: #10141c; color: #e6edf3; }
+  header { padding: 18px 22px; border-bottom: 1px solid #232a36;
+           display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  #meta { font-size: 12px; color: #8b949e; }
+  main { padding: 22px; max-width: 900px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .card { background: #161b22; border: 1px solid #232a36; border-radius: 8px; padding: 16px; }
+  .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; }
+  .value { font-size: 30px; font-weight: 600; margin-top: 6px; }
+  .unit { font-size: 15px; font-weight: 400; color: #8b949e; margin-left: 3px; }
+  .chart { margin-top: 22px; background: #161b22; border: 1px solid #232a36;
+           border-radius: 8px; padding: 16px; }
+  canvas { width: 100%; height: 220px; display: block; }
+  .legend { font-size: 12px; color: #8b949e; margin-top: 10px; display: flex; gap: 18px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  footer { font-size: 12px; color: #6e7681; padding: 16px 22px; }
+  .stale { color: #f0883e; }
+  .down { color: #f85149; }
+</style>
+</head>
+<body>
+<header>
+  <h1>sensor node</h1>
+  <div id="meta">connecting</div>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><div class="label">temperature</div>
+      <div class="value"><span id="temp">--</span><span class="unit">&deg;C</span></div></div>
+    <div class="card"><div class="label">humidity</div>
+      <div class="value"><span id="hum">--</span><span class="unit">%</span></div></div>
+    <div class="card"><div class="label">light</div>
+      <div class="value"><span id="light">--</span><span class="unit">%</span></div></div>
+    <div class="card"><div class="label">wifi</div>
+      <div class="value"><span id="rssi">--</span><span class="unit">dBm</span></div></div>
+  </div>
+
+  <div class="chart">
+    <canvas id="plot"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:#58a6ff"></span>temperature</span>
+      <span><span class="dot" style="background:#3fb950"></span>humidity</span>
+    </div>
+  </div>
+</main>
+
+<footer id="stats"></footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let series = [];
+
+function fmt(v, d) { return (v === undefined || v === null) ? '--' : v.toFixed(d); }
+
+function draw() {
+  const c = $('plot');
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = 220;
+  c.width = w * dpr; c.height = h * dpr;
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  if (series.length < 2) {
+    ctx.fillStyle = '#6e7681';
+    ctx.font = '13px system-ui';
+    ctx.fillText('waiting for samples', 12, h / 2);
+    return;
+  }
+
+  const pad = { l: 34, r: 10, t: 12, b: 20 };
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+
+  ctx.strokeStyle = '#232a36';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (ih / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+  }
+
+  const temps = series.map(s => s.temperature_c);
+  const hums = series.map(s => s.humidity_pct);
+  const lo = Math.min(...temps, ...hums) - 2;
+  const hi = Math.max(...temps, ...hums) + 2;
+
+  ctx.fillStyle = '#6e7681';
+  ctx.font = '10px system-ui';
+  for (let i = 0; i <= 4; i++) {
+    const v = hi - ((hi - lo) / 4) * i;
+    ctx.fillText(v.toFixed(0), 8, pad.t + (ih / 4) * i + 3);
+  }
+
+  const line = (values, color) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = pad.l + (iw / (values.length - 1)) * i;
+      const y = pad.t + ih - ((v - lo) / (hi - lo)) * ih;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+  };
+
+  line(temps, '#58a6ff');
+  line(hums, '#3fb950');
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/telemetry', { cache: 'no-store' });
+    const d = await r.json();
+    const reading = d.reading || {};
+
+    $('temp').textContent = fmt(reading.temperature_c, 1);
+    $('hum').textContent = fmt(reading.humidity_pct, 1);
+    $('light').textContent = fmt(reading.light_pct, 0);
+    $('rssi').textContent = d.rssi_dbm;
+
+    const stale = (reading.age_s || 0) > 15;
+    $('meta').className = stale ? 'stale' : '';
+    $('meta').textContent = d.ip + '  ' + (stale ? 'last reading ' + reading.age_s + ' s ago' : 'live');
+    $('stats').textContent =
+      'uptime ' + d.uptime_s + ' s  |  ' + d.samples + ' samples, ' +
+      d.read_errors + ' failed reads  |  heap ' + (d.free_heap / 1024).toFixed(0) + ' KB';
+  } catch (e) {
+    $('meta').className = 'down';
+    $('meta').textContent = 'node unreachable';
+  }
+}
+
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/history', { cache: 'no-store' });
+    const d = await r.json();
+    series = d.samples || [];
+    draw();
+  } catch (e) { return; }
+}
+
+poll();
+loadHistory();
+setInterval(poll, 5000);
+setInterval(loadHistory, 15000);
+window.addEventListener('resize', draw);
+</script>
+</body>
+</html>

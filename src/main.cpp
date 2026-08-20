@@ -1,61 +1,56 @@
 #include <Arduino.h>
-#include <WiFi.h>
-#include <WebServer.h>
+#include <ArduinoJson.h>
+#include <DHT.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
-#include <DHT.h>
-#include <ArduinoJson.h>
+#include <WebServer.h>
+#include <WiFi.h>
 
 #include "config.h"
+#include "history.h"
 
-struct Sample {
-    uint32_t uptime;
-    float temperature;
-    float humidity;
-    uint16_t light;
-    bool valid;
-};
+using telemetry::History;
+using telemetry::Sample;
+using telemetry::Stats;
 
 DHT dht(PIN_DHT, DHT22);
 WebServer server(80);
 
-static Sample history[HISTORY_SIZE];
-static size_t historyHead = 0;
-static size_t historyCount = 0;
-static Sample latest = {0, NAN, NAN, 0, false};
+static History<HISTORY_SIZE> history;
+static Sample latest;
+static bool haveReading = false;
 
 static uint32_t sampleCount = 0;
 static uint32_t errorCount = 0;
 static unsigned long lastSample = 0;
 static unsigned long lastWifiCheck = 0;
 
-static void pushSample(const Sample &s) {
-    history[historyHead] = s;
-    historyHead = (historyHead + 1) % HISTORY_SIZE;
-    if (historyCount < HISTORY_SIZE) {
-        historyCount++;
-    }
-}
-
 static void readSensors() {
-    Sample s;
-    s.uptime = millis() / 1000;
-    s.temperature = dht.readTemperature();
-    s.humidity = dht.readHumidity();
-    s.light = analogRead(PIN_LDR);
-    s.valid = !isnan(s.temperature) && !isnan(s.humidity);
+    float temperature = dht.readTemperature();
+    float humidity = dht.readHumidity();
+    uint16_t light = analogRead(PIN_LDR);
 
     sampleCount++;
-    if (!s.valid) {
+
+    if (!telemetry::reading_is_plausible(temperature, humidity)) {
         errorCount++;
-        Serial.printf("[%lu] dht read failed (%u total)\n", s.uptime, errorCount);
+        Serial.printf("[%lu] sensor read rejected (%lu of %lu)\n",
+                      millis() / 1000, errorCount, sampleCount);
         return;
     }
 
-    latest = s;
-    pushSample(s);
+    Sample sample;
+    sample.uptime_s = millis() / 1000;
+    sample.temperature_c = temperature;
+    sample.humidity_pct = humidity;
+    sample.light_raw = light;
+
+    latest = sample;
+    haveReading = true;
+    history.push(sample);
+
     Serial.printf("[%lu] %.1f C  %.1f %%RH  light %u\n",
-                  s.uptime, s.temperature, s.humidity, s.light);
+                  sample.uptime_s, sample.temperature_c, sample.humidity_pct, sample.light_raw);
 }
 
 static void sendTelemetry() {
@@ -67,14 +62,15 @@ static void sendTelemetry() {
     doc["ip"] = WiFi.localIP().toString();
     doc["samples"] = sampleCount;
     doc["read_errors"] = errorCount;
+    doc["history_size"] = history.size();
 
     JsonObject reading = doc["reading"].to<JsonObject>();
-    if (latest.valid) {
-        reading["temperature_c"] = round(latest.temperature * 10) / 10.0;
-        reading["humidity_pct"] = round(latest.humidity * 10) / 10.0;
-        reading["light_raw"] = latest.light;
-        reading["light_pct"] = round((latest.light / 4095.0) * 1000) / 10.0;
-        reading["age_s"] = (millis() / 1000) - latest.uptime;
+    if (haveReading) {
+        reading["temperature_c"] = round(latest.temperature_c * 10) / 10.0;
+        reading["humidity_pct"] = round(latest.humidity_pct * 10) / 10.0;
+        reading["light_raw"] = latest.light_raw;
+        reading["light_pct"] = round(telemetry::light_percent(latest.light_raw) * 10) / 10.0;
+        reading["age_s"] = (millis() / 1000) - latest.uptime_s;
     } else {
         reading["error"] = "no valid reading yet";
     }
@@ -84,21 +80,33 @@ static void sendTelemetry() {
     server.send(200, "application/json", out);
 }
 
+static void addStats(JsonObject parent, const char *key, const Stats &stats) {
+    JsonObject node = parent[key].to<JsonObject>();
+    node["min"] = round(stats.min * 10) / 10.0;
+    node["max"] = round(stats.max * 10) / 10.0;
+    node["mean"] = round(stats.mean * 10) / 10.0;
+}
+
 static void sendHistory() {
     JsonDocument doc;
     JsonArray items = doc["samples"].to<JsonArray>();
 
-    size_t start = (historyHead + HISTORY_SIZE - historyCount) % HISTORY_SIZE;
-    for (size_t i = 0; i < historyCount; i++) {
-        const Sample &s = history[(start + i) % HISTORY_SIZE];
+    for (uint16_t i = 0; i < history.size(); i++) {
+        const Sample &sample = history.at(i);
         JsonObject item = items.add<JsonObject>();
-        item["t"] = s.uptime;
-        item["temperature_c"] = round(s.temperature * 10) / 10.0;
-        item["humidity_pct"] = round(s.humidity * 10) / 10.0;
-        item["light_raw"] = s.light;
+        item["t"] = sample.uptime_s;
+        item["temperature_c"] = round(sample.temperature_c * 10) / 10.0;
+        item["humidity_pct"] = round(sample.humidity_pct * 10) / 10.0;
+        item["light_raw"] = sample.light_raw;
     }
-    doc["count"] = historyCount;
+
+    doc["count"] = history.size();
+    doc["capacity"] = history.capacity();
     doc["interval_s"] = SAMPLE_INTERVAL_MS / 1000;
+
+    JsonObject stats = doc["stats"].to<JsonObject>();
+    addStats(stats, "temperature_c", history.temperature_stats());
+    addStats(stats, "humidity_pct", history.humidity_stats());
 
     String out;
     serializeJson(doc, out);
@@ -166,9 +174,9 @@ void setup() {
     server.on("/api/telemetry", HTTP_GET, sendTelemetry);
     server.on("/api/history", HTTP_GET, sendHistory);
     server.on("/api/health", HTTP_GET, []() {
-        server.send(latest.valid ? 200 : 503,
+        server.send(haveReading ? 200 : 503,
                     "text/plain",
-                    latest.valid ? "ok" : "no sensor data");
+                    haveReading ? "ok" : "no sensor data");
     });
     server.onNotFound([]() { server.send(404, "text/plain", "not found"); });
 

@@ -6,6 +6,22 @@ on:
   pull_request:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install platformio
+        run: pip install platformio
+
+      - name: Run the unit tests on the host
+        run: pio test -e native
+
   build:
     runs-on: ubuntu-latest
 
@@ -34,7 +50,7 @@ jobs:
           fi
 
       - name: Build the firmware
-        run: pio run
+        run: pio run -e esp32dev
 
       - name: Static analysis
-        run: pio check --skip-packages --fail-on-defect high
+        run: pio check -e esp32dev --skip-packages --fail-on-defect high

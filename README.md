@@ -17,13 +17,35 @@ no broker, no app. You point a browser at the board and it answers.
   through the router for its IP
 - reconnects on its own when the WiFi drops, and reboots if it cannot get back after 20 seconds
 
+## Tested without a board
+
+The ring buffer, the statistics over it and the sanity checks on a reading live in
+`lib/telemetry/`, with no Arduino headers anywhere near them. That means they run as an ordinary
+program on a laptop:
+
+```bash
+make test
+```
+
+```
+14 test cases: 14 succeeded
+```
+
+Fourteen tests, including the cases a ring buffer usually gets wrong: reading back in order after
+it has wrapped, wrapping a hundred times and still returning the oldest sample first, and
+statistics that only cover what is still in the buffer rather than everything ever pushed.
+
+The plausibility check is tested too. A DHT22 that fails a read returns NaN, and a loose data pin
+can return a temperature of 2000 degrees. Both are rejected before they reach the buffer, which
+is why the chart never shows a spike that never happened.
+
 ## API
 
 | Endpoint | Returns |
 |---|---|
 | `GET /` | the dashboard |
 | `GET /api/telemetry` | latest reading plus uptime, free heap, RSSI, sample and error counters |
-| `GET /api/history` | the whole ring buffer, oldest first |
+| `GET /api/history` | the whole ring buffer oldest first, plus min, max and mean |
 | `GET /api/health` | 200 when there is a valid reading, 503 when there is not |
 
 ```json
@@ -90,6 +112,26 @@ Wiring, pin map and the parts list are in [docs/wiring.md](docs/wiring.md).
   problem, and you cannot tell those apart if you silently retry.
 - `JsonDocument` in ArduinoJson 7 sizes itself, which is a lot less fragile than the fixed
   `StaticJsonDocument` capacity everyone gets wrong on version 6.
+- Keeping the ring buffer out of `main.cpp` and in a library with no Arduino includes turned it
+  from code I hoped was right into code with fourteen tests behind it. The wrap around indexing
+  is exactly the kind of thing that looks obviously correct and is off by one.
+
+## Working on this
+
+```bash
+make help
+```
+
+The usual ones: `make build, make test, make upload, make monitor`.
+
+Every push runs the CI workflow described above. A second workflow, `security.yml`, runs weekly
+and on every push: it scans the history for committed secrets with gitleaks.
+
+Dependabot opens pull requests for the GitHub Actions and the dependencies once a week.
+
+Line endings are pinned to LF through `.gitattributes`, because half of this was written on
+Windows and shell scripts with carriage returns fail on Linux in a way that is genuinely
+confusing the first time.
 
 ## Next
 
